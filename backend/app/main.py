@@ -5,6 +5,7 @@ from app.catalog import router as catalog_router
 from app.sessions import router as sessions_router
 from app.cart import router as cart_router
 from app.audit import router as audit_router
+from app.upsell import router as upsell_router
 
 load_dotenv()
 app = FastAPI(title="Concierge Commerce API", description="Agent-readable merchant catalog API for Concierge.", version="1.0.0",)
@@ -14,6 +15,7 @@ app.include_router(catalog_router)
 app.include_router(sessions_router)
 app.include_router(cart_router)
 app.include_router(audit_router)
+app.include_router(upsell_router)
 
 @app.get("/")
 def root():
