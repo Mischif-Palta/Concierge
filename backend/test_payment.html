@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Concierge Razorpay Test</title>
+</head>
+<body>
+    <h1>Concierge Payment Test</h1>
+
+    <p>Order: order_TVKQSejZr5WG5O</p>
+    <p>Amount: ₹4,786.32</p>
+
+    <button id="pay-button">Pay ₹4,786.32</button>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <script>
+        const options = {
+            key: "rzp_test_TVFY2GWzaoqesT",
+            amount: 478632,
+            currency: "INR",
+            name: "Concierge",
+            description: "Concierge Test Order",
+            order_id: "order_TVKQSejZr5WG5O",
+
+            handler: async function (response) {
+                console.log(
+                    "Razorpay order:",
+                    response.razorpay_order_id
+                );
+
+                console.log(
+                    "Razorpay payment:",
+                    response.razorpay_payment_id
+                );
+
+                console.log(
+                    "Razorpay signature:",
+                    response.razorpay_signature
+                );
+
+                try {
+                    const result = await fetch(
+                        "http://127.0.0.1:8000/checkout/confirm",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                razorpay_order_id:
+                                    response.razorpay_order_id,
+                                razorpay_payment_id:
+                                    response.razorpay_payment_id,
+                                razorpay_signature:
+                                    response.razorpay_signature
+                            })
+                        }
+                    );
+
+                    const data = await result.json();
+
+                    console.log(
+                        "Confirmation response:",
+                        data
+                    );
+
+                    document.body.innerHTML += `
+                        <h2>Payment Confirmation</h2>
+                        <pre>${JSON.stringify(
+                            data,
+                            null,
+                            2
+                        )}</pre>
+                    `;
+                } catch (error) {
+                    console.error(
+                        "Confirmation request failed:",
+                        error
+                    );
+
+                    document.body.innerHTML += `
+                        <h2>Confirmation Failed</h2>
+                        <pre>${error}</pre>
+                    `;
+                }
+            },
+
+            modal: {
+                ondismiss: function () {
+                    console.log(
+                        "Payment window closed"
+                    );
+                }
+            }
+        };
+
+        const razorpay = new Razorpay(options);
+
+        document.getElementById(
+            "pay-button"
+        ).onclick = function () {
+            razorpay.open();
+        };
+    </script>
+</body>
+</html>

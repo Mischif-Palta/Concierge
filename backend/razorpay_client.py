@@ -1,10 +1,19 @@
 import os
-from dotenv import load_dotenv
+
 import razorpay
+from dotenv import load_dotenv
 
 load_dotenv()
 
-razorpay_key_id = os.getenv("RAZORPAY_KEY_ID")
-razorpay_secret_key = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-client = razorpay.Client(auth=(razorpay_key_id, razorpay_secret_key))
+if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+    raise RuntimeError("Razorpay credentials are not configured")
+
+client = razorpay.Client(
+    auth=(
+        RAZORPAY_KEY_ID,
+        RAZORPAY_KEY_SECRET
+    )
+)
