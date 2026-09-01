@@ -7,6 +7,7 @@ from app.cart import router as cart_router
 from app.audit import router as audit_router
 from app.upsell import router as upsell_router
 from app.checkout import router as checkout_router
+from app.agent import router as agent_router
 
 load_dotenv()
 
@@ -20,8 +21,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://127.0.0.1:5500",
-        "https://concierge-commerce.vercel.app",
+        "https://your-vercel-url.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -34,6 +36,7 @@ app.include_router(cart_router)
 app.include_router(audit_router)
 app.include_router(upsell_router)
 app.include_router(checkout_router)
+app.include_router(agent_router)
 
 @app.get("/")
 def root():
