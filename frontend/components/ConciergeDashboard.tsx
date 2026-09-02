@@ -55,45 +55,21 @@ type PendingApproval = {
 };
 
 const money = (n: number) =>
-  `INR ${n.toLocaleString("en-IN", {
-    minimumFractionDigits: 2
+  `₹${n.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   })}`;
 
-function cleanMarkdown(
-  text: string
-) {
-  return text
-    .replace(/\\([*_`])/g, "$1")
-    .replace(
-      /\*\*(.*?)\*\*/g,
-      "$1"
-    )
-    .replace(
-      /__(.*?)__/g,
-      "$1"
-    )
-    .replace(
-      /`([^`]+)`/g,
-      "$1"
-    );
-}
+function renderMessage(text: string) {
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
 
-function renderInlineText(
-  text: string
-) {
-  const cleaned =
-    text.replace(
-      /\\([*_`])/g,
-      "$1"
-    );
+  const renderInline = (value: string) => {
+    const parts = value.split(/(\*\*[^*]+\*\*)/g);
 
-  const parts =
-    cleaned.split(
-      /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`)/
-    );
-
-  return parts.map(
-    (part, index) => {
+    return parts.map((part: string, index: number) => {
       if (
         part.startsWith("**") &&
         part.endsWith("**")
@@ -105,197 +81,96 @@ function renderInlineText(
         );
       }
 
-      if (
-        part.startsWith("__") &&
-        part.endsWith("__")
-      ) {
-        return (
-          <strong key={index}>
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-
-      if (
-        part.startsWith("`") &&
-        part.endsWith("`")
-      ) {
-        return (
-          <code key={index}>
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-
-      return (
-        <span key={index}>
-          {cleanMarkdown(
-            part
-          )}
-        </span>
-      );
-    }
-  );
-}
-
-function renderMessage(
-  text: string
-) {
-  const normalized =
-    text
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .trim();
-
-  const lines =
-    normalized.split("\n");
-
-  const rendered: React.ReactNode[] =
-    [];
-
-  let numberedItems: string[] =
-    [];
-
-  let bulletItems: string[] =
-    [];
-
-  const flushLists = () => {
-    if (numberedItems.length) {
-      rendered.push(
-        <div
-          className="message-list"
-          key={`numbered-${rendered.length}`}
-        >
-          {numberedItems.map(
-            (item, index) => (
-              <div
-                className="message-list-item"
-                key={index}
-              >
-                <span className="message-number">
-                  {index + 1}.
-                </span>
-
-                <span className="message-list-content">
-                  {renderInlineText(
-                    item
-                  )}
-                </span>
-              </div>
-            )
-          )}
-        </div>
-      );
-
-      numberedItems = [];
-    }
-
-    if (bulletItems.length) {
-      rendered.push(
-        <div
-          className="message-list"
-          key={`bullets-${rendered.length}`}
-        >
-          {bulletItems.map(
-            (item, index) => (
-              <div
-                className="message-list-item"
-                key={index}
-              >
-                <span className="message-number">
-                  •
-                </span>
-
-                <span className="message-list-content">
-                  {renderInlineText(
-                    item
-                  )}
-                </span>
-              </div>
-            )
-          )}
-        </div>
-      );
-
-      bulletItems = [];
-    }
+      return <span key={index}>{part}</span>;
+    });
   };
 
-  lines.forEach(
-    (line, index) => {
-      const trimmed =
-        line.trim();
+  const parts = normalized
+    .split(/(?=\d+\.\s+)/)
+    .map((part: string) => part.trim())
+    .filter(Boolean);
 
-      if (!trimmed) {
-        flushLists();
-        return;
-      }
-
-      const numberedMatch =
-        trimmed.match(
-          /^\d+\.\s*(.*)$/
-        );
-
-      if (numberedMatch) {
-        numberedItems.push(
-          numberedMatch[1]
-        );
-        return;
-      }
-
-      const bulletMatch =
-        trimmed.match(
-          /^[-*•]\s*(.*)$/
-        );
-
-      if (bulletMatch) {
-        bulletItems.push(
-          bulletMatch[1]
-        );
-        return;
-      }
-
-      flushLists();
-
-      rendered.push(
-        <div
-          className="message-line"
-          key={`line-${index}`}
-        >
-          {renderInlineText(
-            trimmed
-          )}
-        </div>
-      );
-    }
+  const numberedItems = parts.filter(part =>
+    /^\d+\.\s+/.test(part)
   );
 
-  flushLists();
+  if (numberedItems.length >= 2) {
+    const firstNumberIndex = normalized.search(
+      /\d+\.\s+/
+    );
+
+    const intro =
+      firstNumberIndex > 0
+        ? normalized
+            .slice(0, firstNumberIndex)
+            .trim()
+        : "";
+
+    return (
+      <div className="message-text">
+        {intro && (
+          <div className="message-intro">
+            {renderInline(intro)}
+          </div>
+        )}
+
+        <div className="message-list">
+          {numberedItems.map((item, index) => {
+            const match = item.match(
+              /^(\d+)\.\s+([\s\S]*)$/
+            );
+
+            if (!match) {
+              return null;
+            }
+
+            return (
+              <div
+                className="message-list-item"
+                key={index}
+              >
+                <span className="message-number">
+                  {match[1]}.
+                </span>
+
+                <span className="message-list-content">
+                  {renderInline(match[2])}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const lines = normalized.split("\n");
 
   return (
     <div className="message-text">
-      {rendered}
+      {lines.map((line, index) => (
+        <div className="message-line" key={index}>
+          {renderInline(line)}
+        </div>
+      ))}
     </div>
   );
 }
 
-const formatAuditAction = (
-  action: string
-) =>
-  action
+function formatAuditAction(action: string) {
+  return action
     .replaceAll("_", " ")
-    .replace(
-      /\b\w/g,
-      char =>
-        char.toUpperCase()
+    .replace(/\b\w/g, char =>
+      char.toUpperCase()
     );
+}
 
-const formatAuditDetails = (
+function formatAuditDetails(
   details:
     | Record<string, unknown>
     | null
     | undefined
-) => {
+) {
   if (!details) {
     return "Commerce event recorded";
   }
@@ -308,51 +183,29 @@ const formatAuditDetails = (
   }
 
   return entries
-    .map(
-      ([key, value]) => {
-        const label =
-          key
-            .replaceAll(
-              "_",
-              " "
-            )
-            .replace(
-              /\b\w/g,
-              char =>
-                char.toUpperCase()
-            );
+    .map(([key, value]) => {
+      const label =
+        key
+          .replaceAll("_", " ")
+          .replace(
+            /\b\w/g,
+            char => char.toUpperCase()
+          );
 
-        let formattedValue =
-          "";
+      const formatted =
+        typeof value === "object" &&
+        value !== null
+          ? JSON.stringify(value)
+          : String(value);
 
-        if (
-          typeof value ===
-            "object" &&
-          value !== null
-        ) {
-          formattedValue =
-            JSON.stringify(
-              value
-            );
-        } else {
-          formattedValue =
-            String(value);
-        }
+      return `${label}: ${formatted}`;
+    })
+    .join(" · ");
+}
 
-        return `${label}: ${formattedValue}`;
-      }
-    )
-    .join(" | ");
-};
-
-const auditGate = (
-  event: AuditEvent
-) => {
+function auditGate(event: AuditEvent) {
   const details =
     event.details ?? {};
-
-  const action =
-    event.action.toLowerCase();
 
   if (
     details.requires_human_approval ===
@@ -365,29 +218,18 @@ const auditGate = (
 
   if (
     details.allowed === false ||
-    action.includes(
-      "blocked"
-    ) ||
-    action.includes(
-      "failed"
-    ) ||
-    action.includes(
-      "rejected"
-    )
+    event.action
+      .toLowerCase()
+      .includes("failed") ||
+    event.action
+      .toLowerCase()
+      .includes("blocked")
   ) {
     return "Blocked";
   }
 
-  if (
-    action.includes(
-      "human_approval_granted"
-    )
-  ) {
-    return "Allowed";
-  }
-
   return "Allowed";
-};
+}
 
 export default function ConciergeDashboard() {
   const [query, setQuery] =
@@ -397,14 +239,10 @@ export default function ConciergeDashboard() {
     useState<Product[]>([]);
 
   const [session, setSession] =
-    useState<Session | null>(
-      null
-    );
+    useState<Session | null>(null);
 
   const [cart, setCart] =
-    useState<Cart | null>(
-      null
-    );
+    useState<Cart | null>(null);
 
   const [messages, setMessages] =
     useState<
@@ -416,14 +254,12 @@ export default function ConciergeDashboard() {
       {
         who: "Concierge",
         text:
-          "Hi - tell me what you're looking for and I'll pull some options from the catalog."
+          "Tell me what you're shopping for. I'll search the merchant catalog, evaluate the options and keep every purchase within policy."
       }
     ]);
 
   const [audit, setAudit] =
-    useState<AuditEvent[]>(
-      []
-    );
+    useState<AuditEvent[]>([]);
 
   const [
     pendingApproval,
@@ -483,15 +319,29 @@ export default function ConciergeDashboard() {
   ] =
     useState("");
 
+  const [
+    compareIds,
+    setCompareIds
+  ] =
+    useState<number[]>([]);
+
+  const [
+    showComparison,
+    setShowComparison
+  ] =
+    useState(false);
+
   const total =
     cart?.total ?? 0;
 
-  const cap = 5000;
+  const autonomousLimit =
+    5000;
 
-  const percent =
+  const usagePercent =
     Math.min(
       100,
-      (total / cap) * 100
+      (total / autonomousLimit) *
+        100
     );
 
   const cartItems =
@@ -507,6 +357,18 @@ export default function ConciergeDashboard() {
           )
         ),
       [cartItems]
+    );
+
+  const compareProducts =
+    useMemo(
+      () =>
+        products.filter(
+          product =>
+            compareIds.includes(
+              product.id
+            )
+        ),
+      [products, compareIds]
     );
 
   const humanApproved =
@@ -543,22 +405,16 @@ export default function ConciergeDashboard() {
       const events =
         result.events;
 
-      setAudit(
-        events
-      );
+      setAudit(events);
 
-      const approvalRequestIndex =
-        events.reduce(
-          (
-            latestIndex,
-            event,
-            index
-          ) => {
+      const latestApproval =
+        [...events]
+          .reverse()
+          .find(event => {
             const details =
-              event.details ??
-              {};
+              event.details ?? {};
 
-            const isApprovalRequest =
+            return (
               event.action ===
                 "policy_decision" &&
               details.policy_status ===
@@ -566,165 +422,86 @@ export default function ConciergeDashboard() {
               details.requires_human_approval ===
                 true &&
               typeof details.product_id ===
-                "number";
+                "number"
+            );
+          });
 
-            if (
-              isApprovalRequest
-            ) {
-              return index;
-            }
-
-            return latestIndex;
-          },
-          -1
-        );
-
-      if (
-        approvalRequestIndex ===
-        -1
-      ) {
+      if (!latestApproval) {
         setPendingApproval(
           null
         );
-
         return;
       }
 
-      const approvalRequest =
-        events[
-          approvalRequestIndex
-        ];
-
-      const requestDetails =
-        approvalRequest.details ??
+      const details =
+        latestApproval.details ??
         {};
 
-      const productId =
-        Number(
-          requestDetails.product_id
+      const requestIndex =
+        events.indexOf(
+          latestApproval
         );
 
-      const cartId =
-        String(
-          requestDetails.cart_id ??
-            ""
-        );
-
-      const approvalGranted =
+      const resolved =
         events
-          .slice(
-            approvalRequestIndex + 1
-          )
+          .slice(requestIndex + 1)
           .some(event => {
             if (
               event.action !==
-              "human_approval_granted"
+                "human_approval_granted" &&
+              event.action !==
+                "human_approval_rejected"
             ) {
               return false;
             }
 
-            const details =
+            const eventDetails =
               event.details ??
               {};
 
-            const grantedProductId =
-              Number(
-                details.product_id
-              );
-
-            const grantedCartId =
-              String(
-                details.cart_id ??
-                  ""
-              );
-
             return (
-              grantedProductId ===
-                productId &&
-              grantedCartId ===
-                cartId
+              Number(
+                eventDetails.product_id
+              ) ===
+                Number(
+                  details.product_id
+                ) &&
+              String(
+                eventDetails.cart_id ??
+                  ""
+              ) ===
+                String(
+                  details.cart_id ??
+                    ""
+                )
             );
           });
 
-      if (
-        approvalGranted
-      ) {
+      if (resolved) {
         setPendingApproval(
           null
         );
-
-        return;
-      }
-
-      const approvalRejected =
-        events
-          .slice(
-            approvalRequestIndex + 1
-          )
-          .some(event => {
-            if (
-              event.action !==
-              "human_approval_rejected"
-            ) {
-              return false;
-            }
-
-            const details =
-              event.details ??
-              {};
-
-            const rejectedProductId =
-              Number(
-                details.product_id
-              );
-
-            const rejectedCartId =
-              String(
-                details.cart_id ??
-                  ""
-              );
-
-            return (
-              rejectedProductId ===
-                productId &&
-              rejectedCartId ===
-                cartId
-            );
-          });
-
-      if (
-        approvalRejected
-      ) {
-        setPendingApproval(
-          null
-        );
-
         return;
       }
 
       setPendingApproval({
-        productId:
-          productId,
-        productName:
-          String(
-            requestDetails.product_name ??
-              "Requested product"
-          ),
-        quantity:
-          Number(
-            requestDetails.quantity ??
-              1
-          ),
-        price:
-          Number(
-            requestDetails.product_price ??
-              0
-          ),
-        reason:
-          String(
-            requestDetails.reason ??
-              "This purchase requires human approval."
-          )
+        productId: Number(
+          details.product_id
+        ),
+        productName: String(
+          details.product_name ??
+            "Requested product"
+        ),
+        quantity: Number(
+          details.quantity ?? 1
+        ),
+        price: Number(
+          details.product_price ?? 0
+        ),
+        reason: String(
+          details.reason ??
+            "This purchase requires human approval."
+        )
       });
     } catch {
     }
@@ -735,10 +512,7 @@ export default function ConciergeDashboard() {
 
     async function initialize() {
       try {
-        setLoading(
-          true
-        );
-
+        setLoading(true);
         setError("");
 
         const createdSession =
@@ -782,20 +556,16 @@ export default function ConciergeDashboard() {
           createdSession.session_id
         );
       } catch (err) {
-        if (!mounted) {
-          return;
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to initialize Concierge"
+          );
         }
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to initialize Concierge"
-        );
       } finally {
         if (mounted) {
-          setLoading(
-            false
-          );
+          setLoading(false);
         }
       }
     }
@@ -826,11 +596,10 @@ export default function ConciergeDashboard() {
         2000
       );
 
-    return () => {
+    return () =>
       window.clearInterval(
         interval
       );
-    };
   }, [session]);
 
   useEffect(() => {
@@ -856,9 +625,8 @@ export default function ConciergeDashboard() {
       script
     );
 
-    return () => {
+    return () =>
       script.remove();
-    };
   }, []);
 
   const search = async (
@@ -869,44 +637,23 @@ export default function ConciergeDashboard() {
 
     if (
       !trimmed ||
-      sending
-    ) {
-      return;
-    }
-
-    if (
+      sending ||
       !session ||
       !cart
     ) {
-      setMessages(
-        items => [
-          ...items,
-          {
-            who: "Concierge",
-            text:
-              "Your Concierge session is still initializing. Please try again."
-          }
-        ]
-      );
-
       return;
     }
 
-    setMessages(
-      items => [
-        ...items,
-        {
-          who: "You",
-          text: trimmed
-        }
-      ]
-    );
+    setMessages(items => [
+      ...items,
+      {
+        who: "You",
+        text: trimmed
+      }
+    ]);
 
     setQuery("");
-
-    setSending(
-      true
-    );
+    setSending(true);
 
     try {
       const result =
@@ -916,16 +663,14 @@ export default function ConciergeDashboard() {
           trimmed
         );
 
-      setMessages(
-        items => [
-          ...items,
-          {
-            who: "Concierge",
-            text:
-              result.response
-          }
-        ]
-      );
+      setMessages(items => [
+        ...items,
+        {
+          who: "Concierge",
+          text:
+            result.response
+        }
+      ]);
 
       const currentCartId =
         result.cart_id ||
@@ -940,9 +685,7 @@ export default function ConciergeDashboard() {
         updatedCart
       );
 
-      if (
-        result.checkout
-      ) {
+      if (result.checkout) {
         setCheckoutData({
           status:
             "payment_pending",
@@ -966,26 +709,18 @@ export default function ConciergeDashboard() {
         session.session_id
       );
     } catch (err) {
-      setMessages(
-        items => [
-          ...items,
-          {
-            who: "Concierge",
-            text:
-              err instanceof Error
-                ? err.message
-                : "I couldn't process that request."
-          }
-        ]
-      );
-
-      await refreshAudit(
-        session.session_id
-      );
+      setMessages(items => [
+        ...items,
+        {
+          who: "Concierge",
+          text:
+            err instanceof Error
+              ? err.message
+              : "I couldn't process that request."
+        }
+      ]);
     } finally {
-      setSending(
-        false
-      );
+      setSending(false);
     }
   };
 
@@ -1004,23 +739,19 @@ export default function ConciergeDashboard() {
           1
         );
 
-      if (
-        result.success
-      ) {
+      if (result.success) {
         setCart(
           result.cart
         );
 
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                `${product.name} was added to your cart.`
-            }
-          ]
-        );
+        setMessages(items => [
+          ...items,
+          {
+            who: "Concierge",
+            text:
+              `${product.name} is in your cart.`
+          }
+        ]);
       } else if (
         result.policy
           ?.requires_human_approval
@@ -1034,20 +765,8 @@ export default function ConciergeDashboard() {
           price:
             product.price,
           reason:
-            result.policy
-              .reason
+            result.policy.reason
         });
-
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                `${product.name} requires human approval before it can be added.`
-            }
-          ]
-        );
       }
 
       if (session) {
@@ -1056,24 +775,16 @@ export default function ConciergeDashboard() {
         );
       }
     } catch (err) {
-      setMessages(
-        items => [
-          ...items,
-          {
-            who: "Concierge",
-            text:
-              err instanceof Error
-                ? err.message
-                : "I couldn't add that product to your cart."
-          }
-        ]
-      );
-
-      if (session) {
-        await refreshAudit(
-          session.session_id
-        );
-      }
+      setMessages(items => [
+        ...items,
+        {
+          who: "Concierge",
+          text:
+            err instanceof Error
+              ? err.message
+              : "I couldn't add that product."
+        }
+      ]);
     }
   };
 
@@ -1102,13 +813,10 @@ export default function ConciergeDashboard() {
             approval.quantity
           );
 
-        if (
-          !result.success
-        ) {
+        if (!result.success) {
           throw new Error(
-            result.policy
-              ?.reason ||
-              "Human approval could not be completed."
+            result.policy?.reason ||
+              "Approval failed."
           );
         }
 
@@ -1120,16 +828,14 @@ export default function ConciergeDashboard() {
           null
         );
 
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                `${approval.productName} was approved and added to your cart.`
-            }
-          ]
-        );
+        setMessages(items => [
+          ...items,
+          {
+            who: "Concierge",
+            text:
+              `${approval.productName} was approved and added to your cart.`
+          }
+        ]);
 
         if (session) {
           await refreshAudit(
@@ -1137,24 +843,16 @@ export default function ConciergeDashboard() {
           );
         }
       } catch (err) {
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                err instanceof Error
-                  ? err.message
-                  : "Human approval could not be completed."
-            }
-          ]
-        );
-
-        if (session) {
-          await refreshAudit(
-            session.session_id
-          );
-        }
+        setMessages(items => [
+          ...items,
+          {
+            who: "Concierge",
+            text:
+              err instanceof Error
+                ? err.message
+                : "Approval failed."
+          }
+        ]);
       } finally {
         setApprovalLoading(
           false
@@ -1168,17 +866,6 @@ export default function ConciergeDashboard() {
         !cart ||
         !cartItems.length
       ) {
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                "Your cart is empty - add something first."
-            }
-          ]
-        );
-
         return;
       }
 
@@ -1204,68 +891,26 @@ export default function ConciergeDashboard() {
           result
         );
 
-        if (
-          result.requires_human_approval ||
-          !result.allowed
-        ) {
-          setMessages(
-            items => [
-              ...items,
-              {
-                who: "Concierge",
-                text:
-                  result.reason ||
-                  "Checkout requires human approval and cannot proceed automatically."
-              }
-            ]
-          );
-        } else if (
-          result.order
-        ) {
-          setMessages(
-            items => [
-              ...items,
-              {
-                who: "Concierge",
-                text:
-                  "Checkout is ready. Payment is pending."
-              }
-            ]
-          );
-        }
-
         if (session) {
           await refreshAudit(
             session.session_id
           );
         }
       } catch (err) {
-        setCheckoutData(
-          null
-        );
-
-        setMessages(
-          items => [
-            ...items,
-            {
-              who: "Concierge",
-              text:
-                err instanceof Error
-                  ? err.message
-                  : "I couldn't start checkout."
-            }
-          ]
-        );
-
         setShowCheckout(
           false
         );
 
-        if (session) {
-          await refreshAudit(
-            session.session_id
-          );
-        }
+        setMessages(items => [
+          ...items,
+          {
+            who: "Concierge",
+            text:
+              err instanceof Error
+                ? err.message
+                : "Checkout failed."
+          }
+        ]);
       } finally {
         setCheckoutLoading(
           false
@@ -1277,12 +922,7 @@ export default function ConciergeDashboard() {
     if (
       !checkoutData?.order ||
       !session ||
-      !cart
-    ) {
-      return;
-    }
-
-    if (
+      !cart ||
       checkoutData.requires_human_approval ||
       !checkoutData.allowed
     ) {
@@ -1294,36 +934,6 @@ export default function ConciergeDashboard() {
     );
 
     try {
-      if (
-        !window.Razorpay
-      ) {
-        await new Promise<void>(
-          resolve => {
-            const started =
-              Date.now();
-
-            const interval =
-              window.setInterval(
-                () => {
-                  if (
-                    window.Razorpay ||
-                    Date.now() -
-                      started >
-                      5000
-                  ) {
-                    window.clearInterval(
-                      interval
-                    );
-
-                    resolve();
-                  }
-                },
-                100
-              );
-          }
-        );
-      }
-
       if (
         !window.Razorpay
       ) {
@@ -1345,9 +955,8 @@ export default function ConciergeDashboard() {
       const order =
         checkoutData.order;
 
-      const options:
-        RazorpayOptions =
-        {
+      const razorpay =
+        new window.Razorpay({
           key,
           amount:
             order.amount,
@@ -1363,16 +972,14 @@ export default function ConciergeDashboard() {
             async payment => {
               try {
                 const confirmation =
-                  await api.confirmPayment(
-                    {
-                      razorpay_order_id:
-                        payment.razorpay_order_id,
-                      razorpay_payment_id:
-                        payment.razorpay_payment_id,
-                      razorpay_signature:
-                        payment.razorpay_signature
-                    }
-                  );
+                  await api.confirmPayment({
+                    razorpay_order_id:
+                      payment.razorpay_order_id,
+                    razorpay_payment_id:
+                      payment.razorpay_payment_id,
+                    razorpay_signature:
+                      payment.razorpay_signature
+                  });
 
                 if (
                   confirmation.status ===
@@ -1386,16 +993,14 @@ export default function ConciergeDashboard() {
                     null
                   );
 
-                  setMessages(
-                    items => [
-                      ...items,
-                      {
-                        who: "Concierge",
-                        text:
-                          `Payment confirmed. Your order has been completed in test mode.\nRazorpay Order: ${payment.razorpay_order_id}`
-                      }
-                    ]
-                  );
+                  setMessages(items => [
+                    ...items,
+                    {
+                      who: "Concierge",
+                      text:
+                        "Payment confirmed. Your order has been completed in test mode."
+                    }
+                  ]);
 
                   const updatedCart =
                     await api.getCart(
@@ -1409,40 +1014,18 @@ export default function ConciergeDashboard() {
                   await refreshAudit(
                     session.session_id
                   );
-                } else {
-                  setMessages(
-                    items => [
-                      ...items,
-                      {
-                        who: "Concierge",
-                        text:
-                          confirmation.reason ||
-                          "Payment could not be confirmed."
-                      }
-                    ]
-                  );
-
-                  await refreshAudit(
-                    session.session_id
-                  );
                 }
               } catch (err) {
-                setMessages(
-                  items => [
-                    ...items,
-                    {
-                      who: "Concierge",
-                      text:
-                        err instanceof Error
-                          ? err.message
-                          : "Payment confirmation failed."
-                    }
-                  ]
-                );
-
-                await refreshAudit(
-                  session.session_id
-                );
+                setMessages(items => [
+                  ...items,
+                  {
+                    who: "Concierge",
+                    text:
+                      err instanceof Error
+                        ? err.message
+                        : "Payment confirmation failed."
+                  }
+                ]);
               } finally {
                 setPaymentLoading(
                   false
@@ -1450,34 +1033,16 @@ export default function ConciergeDashboard() {
               }
             },
           modal: {
-            ondismiss:
-              () => {
-                setPaymentLoading(
-                  false
-                );
-
-                setMessages(
-                  items => [
-                    ...items,
-                    {
-                      who: "Concierge",
-                      text:
-                        "Payment was cancelled. The order was not finalized."
-                    }
-                  ]
-                );
-              }
+            ondismiss: () =>
+              setPaymentLoading(
+                false
+              )
           },
           theme: {
             color:
-              "#6d5dfc"
+              "#7c3aed"
           }
-        };
-
-      const razorpay =
-        new window.Razorpay(
-          options
-        );
+        });
 
       razorpay.open();
     } catch (err) {
@@ -1485,59 +1050,66 @@ export default function ConciergeDashboard() {
         false
       );
 
-      setMessages(
-        items => [
-          ...items,
-          {
-            who: "Concierge",
-            text:
-              err instanceof Error
-                ? err.message
-                : "I couldn't open Razorpay Checkout."
-          }
-        ]
+      setMessages(items => [
+        ...items,
+        {
+          who: "Concierge",
+          text:
+            err instanceof Error
+              ? err.message
+              : "Could not open payment."
+        }
+      ]);
+    }
+  };
+
+  const refreshCatalog = async () => {
+    try {
+      const catalog = await api.getCatalog();
+
+      const randomizedProducts = [...catalog.products].sort(
+        () => Math.random() - 0.5
       );
 
-      await refreshAudit(
-        session.session_id
+      setProducts(randomizedProducts);
+
+      setCompareIds([]);
+      setShowComparison(false);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to refresh catalog"
       );
     }
   };
 
-  const refreshCatalog =
-    async () => {
-      try {
-        setError("");
-
-        const catalog =
-          await api.getCatalog();
-
-        const shuffled =
-          [
-            ...catalog.products
-          ].sort(
-            () =>
-              Math.random() -
-              0.5
-          );
-
-        setProducts(
-          shuffled
-        );
-
-        if (session) {
-          await refreshAudit(
-            session.session_id
-          );
-        }
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to refresh catalog"
+  const toggleCompare = (
+    productId: number
+  ) => {
+    setCompareIds(current => {
+      if (
+        current.includes(
+          productId
+        )
+      ) {
+        return current.filter(
+          id => id !== productId
         );
       }
-    };
+
+      if (
+        current.length >= 3
+      ) {
+        return current;
+      }
+
+      return [
+        ...current,
+        productId
+      ];
+    });
+  };
 
   const checkoutBlocked =
     checkoutData
@@ -1546,9 +1118,12 @@ export default function ConciergeDashboard() {
       : false;
 
   return (
-    <main className="shell">
+    <main className="app-shell">
       <header className="topbar">
-        <div className="brand">
+        <a
+          href="/"
+          className="brand"
+        >
           <span className="brand-mark">
             C
           </span>
@@ -1556,10 +1131,13 @@ export default function ConciergeDashboard() {
           <span>
             Concierge
           </span>
-        </div>
+        </a>
 
         <nav>
-          <a href="/">
+          <a
+            className="active"
+            href="/"
+          >
             Commerce
           </a>
 
@@ -1567,442 +1145,843 @@ export default function ConciergeDashboard() {
             Interop
           </a>
 
-          <span className="test">
+          <a href="/results">
+            Results
+          </a>
+
+          <span className="test-badge">
+            <i />
             TEST MODE
           </span>
         </nav>
       </header>
 
-      <section className="hero">
-        <div>
+      <section className="hero-new">
+        <div className="hero-copy">
           <div className="eyebrow">
+            <span className="pulse" />
             AGENTIC COMMERCE
           </div>
 
           <h1>
-            Your AI shopping agent, with guardrails.
+            Shopping that thinks
+            <span> before it buys.</span>
           </h1>
 
           <p>
             Concierge discovers products,
-            reasons about purchases,
-            keeps an audit trail,
-            and completes transactions
-            within merchant policy.
+            evaluates options, respects
+            merchant policy and completes
+            purchases with a complete
+            audit trail.
           </p>
-        </div>
 
-        <div className="hero-stat">
-          <span>
-            Autonomous limit
-          </span>
+          <div className="hero-actions">
+            <button
+              className="primary-button"
+              onClick={() =>
+                document
+                  .getElementById(
+                    "shopping"
+                  )
+                  ?.scrollIntoView({
+                    behavior:
+                      "smooth"
+                  })
+              }
+            >
+              Start shopping
+              <span>→</span>
+            </button>
 
-          <strong>
-            INR 5,000
-          </strong>
-
-          <small>
-            Human approval above cap
-          </small>
-        </div>
-      </section>
-
-      <section className="commerce-bar">
-        <div>
-          <small>
-            Cart
-          </small>
-
-          <strong>
-            {cartItems.length}{" "}
-            {cartItems.length ===
-            1
-              ? "item"
-              : "items"}
-          </strong>
-        </div>
-
-        <div>
-          <small>
-            Total
-          </small>
-
-          <strong>
-            {money(total)}
-          </strong>
-        </div>
-
-        <div className="track">
-          <div className="track-bg">
-            <div
-              className="track-fill"
-              style={{
-                width: `${percent}%`
-              }}
-            />
+            <a
+              className="secondary-button"
+              href="/interop"
+            >
+              See agent interoperability
+            </a>
           </div>
-
-          <small>
-            {money(total)} /{" "}
-            {money(cap)}
-          </small>
         </div>
 
-        <span
-          className={
-            total > cap &&
-            !humanApproved
-              ? "policy wait"
-              : "policy"
-          }
-        >
-          {total > cap
-            ? humanApproved
-              ? "[OK] Human approved"
-              : "[!] Approval required"
-            : "[OK] Within limit"}
-        </span>
-
-        <button
-          className="checkout"
-          onClick={
-            checkout
-          }
-          disabled={
-            loading ||
-            sending ||
-            checkoutLoading
-          }
-        >
-          {checkoutLoading
-            ? "Checking..."
-            : "Checkout"}
-        </button>
-      </section>
-
-      <section className="grid">
-        <div className="panel chat-panel">
-          <div className="panel-head">
+        <div className="agent-card">
+          <div className="agent-card-top">
             <div>
-              <h2>
-                Shopping with Concierge
-              </h2>
-
-              <span>
-                chat agent
+              <span className="micro-label">
+                CONCIERGE AGENT
               </span>
+
+              <strong>
+                {sending
+                  ? "Thinking..."
+                  : "Ready to shop"}
+              </strong>
             </div>
 
-            <span className="live">
+            <span className="live-pill">
+              <i />
               LIVE
             </span>
           </div>
 
-          <div className="chat-body">
-            {messages.map(
-              (
-                message,
-                index
-              ) => (
-                <div
-                  className={`message ${
-                    message.who ===
-                    "You"
-                      ? "user"
-                      : ""
-                  }`}
-                  key={index}
-                >
-                  <small>
-                    {message.who}
-                  </small>
-
-                  <div>
-                    {renderMessage(
-                      message.text
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-
-          <div className="quick">
-            <button
-              disabled={
-                sending
-              }
-              onClick={() =>
-                search(
-                  "tennis gear"
-                )
-              }
-            >
-              Tennis gear
-            </button>
-
-            <button
-              disabled={
-                sending
-              }
-              onClick={() =>
-                search(
-                  "running shoes"
-                )
-              }
-            >
-              Running shoes
-            </button>
-          </div>
-
-          <div className="input-row">
-            <input
-              value={
-                query
-              }
-              disabled={
-                loading ||
-                sending
-              }
-              onChange={event =>
-                setQuery(
-                  event.target
-                    .value
-                )
-              }
-              onKeyDown={event => {
-                if (
-                  event.key ===
-                    "Enter" &&
-                  !event.shiftKey
-                ) {
-                  event.preventDefault();
-
-                  search(
-                    query
-                  );
-                }
-              }}
-              placeholder={
-                sending
-                  ? "Concierge is thinking..."
-                  : "Ask Concierge something..."
-              }
-            />
-
-            <button
-              disabled={
-                loading ||
-                sending ||
-                !query.trim()
-              }
-              onClick={() =>
-                search(
-                  query
-                )
-              }
-            >
-              {sending
-                ? "..."
-                : "Send"}
-            </button>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>
-                Live audit trail
-              </h2>
-
-              <span>
-                every action, explained
-              </span>
+          <div className="agent-orbit">
+            <div className="orbit-ring ring-one" />
+            <div className="orbit-ring ring-two" />
+            <div className="agent-core">
+              <span>✦</span>
             </div>
           </div>
 
-          <div className="audit">
-            {audit.length ===
-            0 ? (
-              <div className="audit-item">
-                <i />
+          <div className="agent-status">
+            <span>
+              <i />
+              Catalog connected
+            </span>
+
+            <span>
+              <i />
+              Policy engine active
+            </span>
+
+            <span>
+              <i />
+              Audit trail recording
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="trust-strip">
+        <div>
+          <span>01</span>
+          <strong>
+            DISCOVER
+          </strong>
+          <small>
+            Merchant catalog
+          </small>
+        </div>
+
+        <div>
+          <span>02</span>
+          <strong>
+            REASON
+          </strong>
+          <small>
+            Agent decisions
+          </small>
+        </div>
+
+        <div>
+          <span>03</span>
+          <strong>
+            GOVERN
+          </strong>
+          <small>
+            Merchant policy
+          </small>
+        </div>
+
+        <div>
+          <span>04</span>
+          <strong>
+            TRANSACT
+          </strong>
+          <small>
+            Razorpay test mode
+          </small>
+        </div>
+      </section>
+
+      <section
+        id="shopping"
+        className="workspace"
+      >
+        <div className="workspace-heading">
+          <div>
+            <span className="section-kicker">
+              THE AGENT WORKSPACE
+            </span>
+
+            <h2>
+              Shop through conversation.
+            </h2>
+          </div>
+
+          <div className="workspace-meta">
+            <span>
+              SESSION
+            </span>
+
+            <strong>
+              {session
+                ? "CONNECTED"
+                : "CONNECTING"}
+            </strong>
+          </div>
+        </div>
+
+        <div className="workspace-grid">
+          <section className="chat-panel-new panel-new">
+            <div className="panel-header-new">
+              <div>
+                <span className="panel-icon">
+                  ✦
+                </span>
 
                 <div>
-                  <div className="audit-meta">
-                    <span>
-                      System
-                    </span>
-
-                    <em>
-                      waiting
-                    </em>
-                  </div>
-
                   <strong>
-                    Waiting for audit events
+                    Concierge
                   </strong>
 
-                  <p>
-                    Connecting to merchant audit log
-                  </p>
-
-                  <b>
-                    [Pending]
-                  </b>
+                  <small>
+                    AI shopping agent
+                  </small>
                 </div>
               </div>
-            ) : (
-              [
-                ...audit
-              ]
-                .reverse()
-                .map(
-                  (
-                    event,
-                    index
-                  ) => (
-                    <div
-                      className="audit-item"
-                      key={
-                        event.id ??
-                        `${event.action}-${event.created_at}-${index}`
-                      }
-                    >
+
+              <span className="status-dot">
+                {sending
+                  ? "PROCESSING"
+                  : "ONLINE"}
+              </span>
+            </div>
+
+            <div className="chat-feed">
+              {messages.map(
+                (message, index) => (
+                  <div
+                    className={`chat-message ${
+                      message.who ===
+                      "You"
+                        ? "from-user"
+                        : "from-agent"
+                    }`}
+                    key={index}
+                  >
+                    <div className="message-label">
+                      {message.who ===
+                      "You"
+                        ? "YOU"
+                        : "CONCIERGE"}
+                    </div>
+
+                    <div className="message-bubble">
+                      {renderMessage(
+                        message.text
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+
+              {sending && (
+                <div className="thinking">
+                  <span />
+                  <span />
+                  <span />
+                  Concierge is evaluating
+                  your request
+                </div>
+              )}
+            </div>
+
+            <div className="suggestion-row">
+              <button
+                onClick={() =>
+                  search(
+                    "Find me tennis gear under ₹2000"
+                  )
+                }
+              >
+                Tennis gear
+              </button>
+
+              <button
+                onClick={() =>
+                  search(
+                    "Show me running shoes"
+                  )
+                }
+              >
+                Running shoes
+              </button>
+
+              <button
+                onClick={() =>
+                  search(
+                    "Find something under ₹1000"
+                  )
+                }
+              >
+                Under ₹1,000
+              </button>
+            </div>
+
+            <div className="chat-input-new">
+              <input
+                value={query}
+                disabled={
+                  loading ||
+                  sending
+                }
+                onChange={event =>
+                  setQuery(
+                    event.target.value
+                  )
+                }
+                onKeyDown={event => {
+                  if (
+                    event.key ===
+                      "Enter" &&
+                    !event.shiftKey
+                  ) {
+                    event.preventDefault();
+                    search(query);
+                  }
+                }}
+                placeholder={
+                  loading
+                    ? "Connecting to merchant..."
+                    : "What are you looking for?"
+                }
+              />
+
+              <button
+                disabled={
+                  loading ||
+                  sending ||
+                  !query.trim()
+                }
+                onClick={() =>
+                  search(query)
+                }
+              >
+                →
+              </button>
+            </div>
+          </section>
+
+          <aside className="governance-panel panel-new">
+            <div className="panel-header-new">
+              <div>
+                <span className="panel-icon shield">
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Policy Engine
+                  </strong>
+
+                  <small>
+                    Autonomous governance
+                  </small>
+                </div>
+              </div>
+
+              <span className="status-dot">
+                ACTIVE
+              </span>
+            </div>
+
+            <div className="limit-block">
+              <div className="limit-heading">
+                <span>
+                  AUTONOMOUS SPEND
+                </span>
+
+                <strong>
+                  {money(total)}
+                </strong>
+              </div>
+
+              <div className="limit-track">
+                <div
+                  style={{
+                    width: `${usagePercent}%`
+                  }}
+                />
+              </div>
+
+              <div className="limit-foot">
+                <span>
+                  ₹0
+                </span>
+
+                <span>
+                  ₹5,000 limit
+                </span>
+              </div>
+            </div>
+
+            <div className="governance-checks">
+              <div>
+                <span className="check">
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Purchase policy
+                  </strong>
+
+                  <small>
+                    Actions evaluated before execution
+                  </small>
+                </div>
+              </div>
+
+              <div>
+                <span className="check">
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Inventory validation
+                  </strong>
+
+                  <small>
+                    Stock verified at checkout
+                  </small>
+                </div>
+              </div>
+
+              <div>
+                <span className="check">
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Human escalation
+                  </strong>
+
+                  <small>
+                    Required above ₹5,000
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`governance-state ${
+                total > autonomousLimit &&
+                !humanApproved
+                  ? "warning"
+                  : ""
+              }`}
+            >
+              <span>
+                {total >
+                  autonomousLimit &&
+                !humanApproved
+                  ? "!"
+                  : "✓"}
+              </span>
+
+              <div>
+                <strong>
+                  {total >
+                    autonomousLimit &&
+                  !humanApproved
+                    ? "Human approval required"
+                    : "Within autonomous policy"}
+                </strong>
+
+                <small>
+                  {total >
+                    autonomousLimit &&
+                  !humanApproved
+                    ? "The agent cannot continue without authorization."
+                    : "Concierge can continue autonomously."}
+                </small>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section className="catalog-section">
+        <div className="section-heading-row">
+          <div>
+            <span className="section-kicker">
+              MERCHANT INVENTORY
+            </span>
+
+            <h2>
+              Browse the catalog.
+            </h2>
+          </div>
+
+          <button
+            className="refresh-button"
+            onClick={
+              refreshCatalog
+            }
+          >
+            ↻ Refresh catalog
+          </button>
+        </div>
+
+        {compareIds.length > 0 && (
+          <div className="compare-toolbar">
+            <div>
+              <span className="compare-count">
+                {compareIds.length}
+              </span>
+
+              <span>
+                products selected
+              </span>
+            </div>
+
+            <div>
+              <button
+                disabled={
+                  compareIds.length <
+                  2
+                }
+                onClick={() =>
+                  setShowComparison(
+                    true
+                  )
+                }
+              >
+                Compare options
+              </button>
+
+              <button
+                onClick={() => {
+                  setCompareIds([]);
+                  setShowComparison(
+                    false
+                  );
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="error-banner">
+            {error}
+          </div>
+        )}
+
+        <div className="product-grid">
+          {products.map(product => (
+            <article
+              className="product-card-new"
+              key={product.id}
+            >
+              <div className="product-image-new">
+                <div className="product-category">
+                  {product.category}
+                </div>
+
+                {product.image ? (
+                  <img
+                    src={
+                      product.image
+                    }
+                    alt={
+                      product.name
+                    }
+                  />
+                ) : (
+                  <div className="image-placeholder">
+                    PRODUCT
+                  </div>
+                )}
+
+                {product.discount_percentage >
+                  0 && (
+                  <span className="discount-badge">
+                    -
+                    {product.discount_percentage.toFixed(
+                      0
+                    )}
+                    %
+                  </span>
+                )}
+
+                {compareIds.includes(
+                  product.id
+                ) && (
+                  <span className="selected-badge">
+                    ✓ COMPARE
+                  </span>
+                )}
+              </div>
+
+              <div className="product-info-new">
+                <div className="product-rating">
+                  ★{" "}
+                  {(product.rating ?? 0).toFixed(
+                    1
+                  )}
+
+                  <span>
+                    · {product.stock} in stock
+                  </span>
+                </div>
+
+                <h3>
+                  {product.name}
+                </h3>
+
+                <div className="product-price-row">
+                  <strong>
+                    {money(
+                      product.price
+                    )}
+                  </strong>
+
+                  <span>
+                    ID #{product.id}
+                  </span>
+                </div>
+
+                <button
+                  className="add-button"
+                  disabled={
+                    !product.stock ||
+                    sending
+                  }
+                  onClick={() =>
+                    addToCart(
+                      product
+                    )
+                  }
+                >
+                  {cartProductIds.has(
+                    product.id
+                  )
+                    ? "Add another"
+                    : "Add to cart"}
+
+                  <span>
+                    +
+                  </span>
+                </button>
+
+                <button
+                  className={`compare-button ${
+                    compareIds.includes(
+                      product.id
+                    )
+                      ? "selected"
+                      : ""
+                  }`}
+                  disabled={
+                    !product.stock ||
+                    (compareIds.length >=
+                      3 &&
+                      !compareIds.includes(
+                        product.id
+                      ))
+                  }
+                  onClick={() =>
+                    toggleCompare(
+                      product.id
+                    )
+                  }
+                >
+                  {compareIds.includes(
+                    product.id
+                  )
+                    ? "✓ Selected for comparison"
+                    : "Compare product"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="audit-section">
+        <div className="section-heading-row">
+          <div>
+            <span className="section-kicker">
+              TRANSPARENCY LAYER
+            </span>
+
+            <h2>
+              Every decision leaves a trace.
+            </h2>
+          </div>
+
+          <span className="audit-live">
+            ● LIVE AUDIT
+          </span>
+        </div>
+
+        <div className="audit-timeline">
+          {audit.length === 0 ? (
+            <div className="audit-empty">
+              Waiting for commerce events...
+            </div>
+          ) : (
+            [...audit]
+              .reverse()
+              .slice(0, 8)
+              .map(
+                (
+                  event,
+                  index
+                ) => (
+                  <div
+                    className="audit-event"
+                    key={
+                      event.id ??
+                      `${event.action}-${index}`
+                    }
+                  >
+                    <div className="audit-node">
                       <i />
+                    </div>
 
+                    <div className="audit-event-main">
                       <div>
-                        <div className="audit-meta">
-                          <span>
-                            Backend
-                          </span>
-
-                          <em>
-                            {event.created_at
-                              ? new Date(
-                                  event.created_at
-                                ).toLocaleTimeString(
-                                  "en-IN",
-                                  {
-                                    hour:
-                                      "2-digit",
-                                    minute:
-                                      "2-digit",
-                                    second:
-                                      "2-digit"
-                                  }
-                                )
-                              : "now"}
-                          </em>
-                        </div>
-
                         <strong>
                           {formatAuditAction(
                             event.action
                           )}
                         </strong>
 
-                        <p>
-                          {formatAuditDetails(
-                            event.details
-                          )}
-                        </p>
-
-                        <b>
-                          [
-                          {
-                            auditGate(
-                              event
-                            )
-                          }
-                          ]
-                        </b>
+                        <span>
+                          {event.created_at
+                            ? new Date(
+                                event.created_at
+                              ).toLocaleTimeString(
+                                "en-IN",
+                                {
+                                  hour:
+                                    "2-digit",
+                                  minute:
+                                    "2-digit"
+                                }
+                              )
+                            : "now"}
+                        </span>
                       </div>
+
+                      <p>
+                        {formatAuditDetails(
+                          event.details
+                        )}
+                      </p>
                     </div>
-                  )
+
+                    <span
+                      className={`audit-status ${
+                        auditGate(
+                          event
+                        ) ===
+                        "Approval Required"
+                          ? "approval"
+                          : auditGate(
+                              event
+                            ) ===
+                            "Blocked"
+                          ? "blocked"
+                          : ""
+                      }`}
+                    >
+                      {auditGate(
+                        event
+                      )}
+                    </span>
+                  </div>
                 )
-            )}
-          </div>
+              )
+          )}
+        </div>
+      </section>
+
+      <footer className="site-footer">
+        <div>
+          <span className="footer-logo">
+            C
+          </span>
+
+          <strong>
+            Concierge
+          </strong>
         </div>
 
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>
-                Browse catalog
-              </h2>
+        <span>
+          Governed agentic commerce
+        </span>
 
-              <span>
-                {session
-                  ? "merchant inventory"
-                  : "connecting..."}
-              </span>
+        <div>
+          <a href="/interop">
+            Independent agent →
+          </a>
+
+          <a href="/results">
+            Revenue evidence →
+          </a>
+        </div>
+      </footer>
+
+      {showComparison && (
+        <div className="overlay">
+          <div className="modal-new comparison-modal-new">
+            <div className="modal-heading-new">
+              <div>
+                <span>
+                  PRODUCT INTELLIGENCE
+                </span>
+
+                <h2>
+                  Compare your options.
+                </h2>
+              </div>
+
+              <button
+                className="close-button"
+                onClick={() =>
+                  setShowComparison(
+                    false
+                  )
+                }
+              >
+                ×
+              </button>
             </div>
 
-            <button
-              className="shuffle"
-              onClick={
-                refreshCatalog
-              }
-            >
-              Refresh
-            </button>
-          </div>
+            <div className="comparison-grid-new">
+              {compareProducts.map(
+                product => (
+                  <div
+                    className="comparison-card-new"
+                    key={
+                      product.id
+                    }
+                  >
+                    <div className="comparison-image-new">
+                      {product.image && (
+                        <img
+                          src={
+                            product.image
+                          }
+                          alt={
+                            product.name
+                          }
+                        />
+                      )}
+                    </div>
 
-          {error && (
-            <div className="product-body">
-              <span>
-                {error}
-              </span>
-            </div>
-          )}
-
-          <div className="catalog">
-            {products.map(
-              product => (
-                <article
-                  className="product"
-                  key={
-                    product.id
-                  }
-                >
-                  <div className="product-art">
-                    {product.image ? (
-                      <img
-                        src={
-                          product.image
-                        }
-                        alt={
-                          product.name
-                        }
-                        style={{
-                          width:
-                            "100%",
-                          height:
-                            "100%",
-                          objectFit:
-                            "contain"
-                        }}
-                      />
-                    ) : (
-                      product.category ===
-                      "Tennis"
-                        ? "TENNIS"
-                        : "SPORT"
-                    )}
-                  </div>
-
-                  <div className="product-body">
-                    <small>
-                      {
-                        product.category
-                      }
-                    </small>
+                    <span>
+                      {product.category}
+                    </span>
 
                     <h3>
-                      {
-                        product.name
-                      }
+                      {product.name}
                     </h3>
 
                     <strong>
@@ -2011,96 +1990,102 @@ export default function ConciergeDashboard() {
                       )}
                     </strong>
 
-                    <span>
-                      {product.stock
-                        ? `[OK] ${product.stock} in stock`
-                        : "[X] Out of stock"}
-                    </span>
+                    <div className="comparison-stat">
+                      <span>
+                        Rating
+                      </span>
 
-                    <button
-                      disabled={
-                        !product.stock ||
-                        sending
-                      }
-                      onClick={() =>
-                        addToCart(
-                          product
-                        )
-                      }
-                    >
-                      {cartProductIds.has(
-                        product.id
-                      )
-                        ? "Add another"
-                        : "Add to cart"}
-                    </button>
+                      <b>
+                        ★{" "}
+                        {(product.rating ?? 0).toFixed(
+                          1
+                        )}
+                      </b>
+                    </div>
+
+                    <div className="comparison-stat">
+                      <span>
+                        Stock
+                      </span>
+
+                      <b>
+                        {product.stock}
+                      </b>
+                    </div>
+
+                    <div className="comparison-stat">
+                      <span>
+                        Discount
+                      </span>
+
+                      <b>
+                        {product.discount_percentage.toFixed(
+                          0
+                        )}
+                        %
+                      </b>
+                    </div>
                   </div>
-                </article>
-              )
-            )}
+                )
+              )}
+            </div>
           </div>
         </div>
-      </section>
-
-      <footer>
-        Independent-agent proof lives
-        on{" "}
-        <a href="/interop">
-          /interop
-        </a>{" "}
-        - same backend, zero shared
-        UI shortcuts.
-      </footer>
+      )}
 
       {pendingApproval && (
-        <div className="approval-backdrop">
-          <div className="approval-modal">
-            <div className="approval-label">
-              HUMAN APPROVAL REQUIRED
+        <div className="overlay">
+          <div className="modal-new approval-modal-new">
+            <div className="approval-icon">
+              !
             </div>
 
+            <span className="modal-kicker">
+              GOVERNANCE CHECK
+            </span>
+
             <h2>
-              Approve this purchase?
+              Human approval required.
             </h2>
 
             <p>
-              Concierge cannot
-              autonomously add this
-              item because it exceeds
-              the autonomous spending
-              limit.
+              This purchase exceeds the
+              agent's autonomous spending
+              limit. Concierge has stopped
+              before executing the action.
             </p>
 
-            <div className="approval-product">
+            <div className="approval-order">
               <div>
+                <span>
+                  PRODUCT
+                </span>
+
                 <strong>
                   {
                     pendingApproval.productName
                   }
                 </strong>
-
-                <span>
-                  Quantity:{" "}
-                  {
-                    pendingApproval.quantity
-                  }
-                </span>
               </div>
 
-              <strong>
-                {money(
-                  pendingApproval.price
-                )}
-              </strong>
+              <div>
+                <span>
+                  AMOUNT
+                </span>
+
+                <strong>
+                  {money(
+                    pendingApproval.price
+                  )}
+                </strong>
+              </div>
             </div>
 
-            <div className="approval-reason">
-              {
-                pendingApproval.reason
-              }
+            <div className="approval-reason-new">
+              {pendingApproval.reason}
             </div>
 
-            <div className="modal-actions">
+            <div className="modal-actions-new">
               <button
                 disabled={
                   approvalLoading
@@ -2124,7 +2109,7 @@ export default function ConciergeDashboard() {
               >
                 {approvalLoading
                   ? "Approving..."
-                  : "Approve Purchase"}
+                  : "Approve purchase"}
               </button>
             </div>
           </div>
@@ -2132,27 +2117,44 @@ export default function ConciergeDashboard() {
       )}
 
       {showCheckout && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <div className="modal-top">
-              <span>
-                CHECKOUT
-              </span>
+        <div className="overlay">
+          <div className="modal-new checkout-modal-new">
+            <div className="modal-heading-new">
+              <div>
+                <span>
+                  SECURE CHECKOUT
+                </span>
 
-              <b>
-                Razorpay Test Mode
-              </b>
+                <h2>
+                  Complete your order.
+                </h2>
+              </div>
+
+              <button
+                className="close-button"
+                onClick={() => {
+                  setShowCheckout(
+                    false
+                  );
+                  setCheckoutData(
+                    null
+                  );
+                }}
+              >
+                ×
+              </button>
             </div>
 
-            <h2>
-              Complete your order
-            </h2>
-
             {checkoutLoading && (
-              <div className="pay-box">
-                Validating your cart and
-                creating a secure Razorpay
-                test order...
+              <div className="checkout-state">
+                <div className="loader" />
+                <strong>
+                  Validating your cart
+                </strong>
+
+                <span>
+                  Checking stock, pricing and merchant policy...
+                </span>
               </div>
             )}
 
@@ -2160,47 +2162,40 @@ export default function ConciergeDashboard() {
               checkoutData && (
                 <>
                   {checkoutData.requires_human_approval && (
-                    <div className="pay-box">
+                    <div className="checkout-warning">
                       <strong>
-                        Approval Required
+                        Approval required
                       </strong>
 
-                      <br />
-
-                      {
-                        checkoutData.reason
-                      }
-                    </div>
-                  )}
-
-                  {!checkoutData.allowed &&
-                    !checkoutData.requires_human_approval && (
-                      <div className="pay-box">
-                        <strong>
-                          Checkout Blocked
-                        </strong>
-
-                        <br />
-
+                      <span>
                         {
                           checkoutData.reason
                         }
-                      </div>
-                    )}
+                      </span>
+                    </div>
+                  )}
 
                   {checkoutData.order &&
                     checkoutData.allowed &&
                     !checkoutData.requires_human_approval && (
-                      <>
-                        <div className="summary">
+                      <div className="checkout-order">
+                        <div>
                           <span>
+                            ORDER
+                          </span>
+
+                          <strong>
                             {
                               checkoutData
-                                .items
-                                ?.length ??
-                              cartItems.length
-                            }{" "}
-                            items
+                                .order
+                                .razorpay_order_id
+                            }
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span>
+                            TOTAL
                           </span>
 
                           <strong>
@@ -2213,34 +2208,21 @@ export default function ConciergeDashboard() {
                           </strong>
                         </div>
 
-                        <div className="pay-box">
-                          Razorpay Test
-                          Mode
-                          <br />
-                          Order:{" "}
-                          {
-                            checkoutData
-                              .order
-                              .razorpay_order_id
-                          }
-                          <br />
-                          Payment status:
-                          pending
+                        <div className="test-payment">
+                          <span>
+                            RAZORPAY
+                          </span>
+
+                          <strong>
+                            TEST MODE
+                          </strong>
                         </div>
-                      </>
+                      </div>
                     )}
                 </>
               )}
 
-            {!checkoutLoading &&
-              !checkoutData && (
-                <div className="pay-box">
-                  Checkout information is
-                  unavailable.
-                </div>
-              )}
-
-            <div className="modal-actions">
+            <div className="modal-actions-new">
               <button
                 disabled={
                   paymentLoading
@@ -2249,7 +2231,6 @@ export default function ConciergeDashboard() {
                   setShowCheckout(
                     false
                   );
-
                   setCheckoutData(
                     null
                   );
@@ -2265,13 +2246,11 @@ export default function ConciergeDashboard() {
                   checkoutBlocked ||
                   !checkoutData?.order
                 }
-                onClick={
-                  pay
-                }
+                onClick={pay}
               >
                 {paymentLoading
-                  ? "Opening..."
-                  : "Pay (test)"}
+                  ? "Opening Razorpay..."
+                  : "Pay securely →"}
               </button>
             </div>
           </div>

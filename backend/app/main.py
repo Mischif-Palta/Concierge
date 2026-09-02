@@ -8,6 +8,7 @@ from app.audit import router as audit_router
 from app.upsell import router as upsell_router
 from app.checkout import router as checkout_router
 from app.agent import router as agent_router
+from app.interop import router as interop_router
 
 load_dotenv()
 
@@ -37,6 +38,7 @@ app.include_router(audit_router)
 app.include_router(upsell_router)
 app.include_router(checkout_router)
 app.include_router(agent_router)
+app.include_router(interop_router)
 
 @app.get("/")
 def root():
