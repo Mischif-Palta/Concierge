@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException
 import requests
+import os
 
 router = APIRouter(prefix="/interop", tags=["interop"])
 
-BASE_URL = "http://127.0.0.1:8000"
-
+BASE_URL = os.getenv(
+    "CONCIERGE_API_URL",
+    "http://127.0.0.1:8000"
+)
 
 def api_request(method, path, payload=None):
     response = requests.request(
